@@ -1,5 +1,3 @@
-import json
-import urllib.request
 import streamlit as st
 
 st.set_page_config(
@@ -8,12 +6,12 @@ st.set_page_config(
 
 st.title("♻️ Eco-Sort & Recycle")
 st.write(
-    "Scan a barcode or type an item name (e.g., plastic pouch, cardboard box) to"
-    " get disposal advice!"
+    "Type an item name (e.g., plastic pouch, cardboard box, glass bottle) to get"
+    " instant disposal advice!"
 )
 
-# Accepts either a barcode number or a text description
-query_input = st.text_input("Enter Barcode or Item Name:")
+# Input field for the item name or barcode
+query_input = st.text_input("Enter Item Name (e.g., plastic pouch, box):")
 
 st.write("Or take a photo of the item:")
 camera_image = st.camera_input("Take a picture")
@@ -22,73 +20,50 @@ if camera_image is not None:
   st.success("Photo captured!")
 
 
-def lookup_product_by_barcode(code):
-  url = f"https://world.openfoodfacts.org/api/v0/product/{code}.json"
-  req = urllib.request.Request(
-      url, headers={"User-Agent": "EcoSortApp - Streamlit - Version 1.0"}
-  )
-  try:
-    with urllib.request.urlopen(req) as response:
-      data = json.loads(response.read().decode("utf-8"))
-      if data.get("status") == 1:
-        return data.get("product", {}).get("product_name", "Unknown Product")
-      return None
-  except Exception as e:
-    return None
+def get_recycling_advice(item):
+  item_lower = item.lower()
 
-
-def ask_hugging_face(item_description):
-  api_token = "HFAK0yKnr2GWvKImFMcFYn8rSePisNb"
-  model_id = "meta-llama/Llama-3-8B-Instruct"
-  url = f"https://api-inference.huggingface.co/models/{model_id}"
-
-  headers = {
-      "Authorization": f"Bearer {api_token}",
-      "Content-Type": "application/json",
-  }
-  prompt = (
-      f"The item is '{item_description}'. Is this item Compostable,"
-      " Recyclable, or Landfill? Give a brief disposal rule."
-  )
-  payload = {"inputs": prompt, "parameters": {"max_new_tokens": 100}}
-
-  req = urllib.request.Request(
-      url, data=json.dumps(payload).encode("utf-8"), headers=headers, method="POST"
-  )
-  try:
-    with urllib.request.urlopen(req) as response:
-      result = json.loads(response.read().decode("utf-8"))
-      if isinstance(result, list) and len(result) > 0:
-        return result[0].get("generated_text", "No response text found.")
-      return str(result)
-  except Exception as e:
-    return f"AI Error: {e}"
+  # Built-in smart recycling rules for common household materials
+  if "plastic" in item_lower or "pouch" in item_lower or "wrapper" in item_lower:
+    return (
+        "**Recyclable (Soft Plastic / Store Drop-Off)**: Most flexible plastic"
+        " pouches and wrappers cannot go in standard curbside bins. Check if"
+        " your local grocery store has a soft plastic recycling drop-off bin,"
+        " otherwise place in Landfill."
+    )
+  elif "cardboard" in item_lower or "box" in item_lower:
+    return (
+        "**Recyclable (Paper/Cardboard)**: Flatten the box completely. Ensure it"
+        " is clean and dry (free of food residue or grease) before putting it"
+        " in your recycling bin."
+    )
+  elif "glass" in item_lower or "bottle" in item_lower:
+    return (
+        "**Recyclable (Glass)**: Rinse out any remaining liquid. Remove caps or"
+        " lids if they are made of a different material. Place in glass"
+        " recycling."
+    )
+  elif "can" in item_lower or "tin" in item_lower or "aluminum" in item_lower:
+    return (
+        "**Recyclable (Metal)**: Rinse lightly and place in your curbside"
+        " recycling bin. Metals can be recycled indefinitely!"
+    )
+  else:
+    return (
+        f"**General Guidance for '{item}'**: Check local municipal"
+        " guidelines. If the item is clean and made of rigid plastic, paper, or"
+        " metal, it is usually recyclable. When in doubt, place in Landfill to"
+        " avoid contaminating other recyclables."
+    )
 
 
 if st.button("Get Recycling Advice"):
   if query_input:
     clean_query = query_input.strip()
-    with st.spinner("Analyzing item with AI..."):
+    with st.spinner("Analyzing item..."):
+      advice = get_recycling_advice(clean_query)
 
-      # If it's a barcode, try looking it up in Open Food Facts first
-      if clean_query.isdigit() and len(clean_query) >= 8:
-        product_name = lookup_product_by_barcode(clean_query)
-        if product_name:
-          st.success(f"Found Product: **{product_name}**")
-          item_to_check = product_name
-        else:
-          # Fallback: If not in food database, let the AI evaluate it directly
-          st.info(
-              "Barcode not in food database. Consulting AI for recycling"
-              " guidance..."
-          )
-          item_to_check = f"Household packaging item (barcode {clean_query})"
-      else:
-        # User typed a text description directly
-        item_to_check = clean_query
-
-      advice = ask_hugging_face(item_to_check)
       st.markdown("### 📋 Disposal Guidance")
       st.write(advice)
   else:
-    st.warning("Please enter a barcode or item name first.")
+    st.warning("Please enter an item name first.")
