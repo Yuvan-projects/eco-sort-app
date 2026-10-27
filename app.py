@@ -77,8 +77,7 @@ def analyze_with_ai(image_file, token):
 
 if active_image is not None:
   st.success("Image received successfully!")
-  st.image(active_image, caption="Your Uploaded Item", use_container_width=True)
-
+  st.image(active_image, caption="Your Uploaded Item", width="stretch")
   if st.button("Analyze Photo"):
     advice = ""
 
