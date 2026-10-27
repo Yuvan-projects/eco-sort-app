@@ -3,86 +3,99 @@ import urllib.request
 import streamlit as st
 
 st.set_page_config(
-    page_title="Universal Barcode Lookup", page_icon="📦", layout="centered"
+    page_title="Eco-Sort Recycler", page_icon="♻️", layout="centered"
 )
 
-st.title("📦 Universal Barcode Lookup & Recycler")
+st.title("♻️ Eco-Sort & Recycle")
 st.write(
-    "Type any product barcode number. If it's not in the database, our smart"
-    " fallback will guide you!"
+    "Type any product barcode number or item name to get instant disposal"
+    " advice!"
 )
 
-# Sidebar for API Key Configuration
+# Sidebar for optional API configuration
 st.sidebar.header("⚙️ API Configuration")
 api_key = st.sidebar.text_input(
     "Product API Key (Optional)", type="password", value="HFAK0yKnr2GWvKImFMcFYn8rSePisNb"
 )
 
-# Main Barcode Typing Input
-barcode_input = st.text_input(
-    "Enter Barcode Number:", placeholder="e.g. 8904132956728"
+# Main typing input (handles both barcodes and item names)
+query_input = st.text_input(
+    "Enter Barcode Number or Item Name:", placeholder="e.g. 8904132956728"
 )
 
 
-def lookup_universal_barcode(code, key):
+def lookup_api_barcode(code, key):
   if not key:
-    return None, None
+    return None
   url = f"https://go-upc.com/api/v1/code/{code}"
   headers = {"Authorization": f"Bearer {key}"}
   req = urllib.request.Request(url, headers=headers)
   try:
-    with urllib.request.urlopen(req) as response:
+    with urllib.request.urlopen(req, timeout=5) as response:
       data = json.loads(response.read().decode("utf-8"))
       product = data.get("product", {})
-      return product.get("name"), product.get("description")
+      return product.get("name")
   except Exception:
-    return None, None
+    return None
 
 
-if st.button("Lookup & Get Advice"):
-  if barcode_input:
-    clean_code = barcode_input.strip()
+def get_local_advice(query):
+  item_lower = query.lower()
 
-    if not clean_code.isdigit():
-      st.error("Please enter numbers only for the barcode.")
-    else:
-      product_name = None
-      description = None
+  if "plastic" in item_lower or "pouch" in item_lower or "wrapper" in item_lower:
+    return (
+        "**Soft Plastic / Pouch**: Flexible plastic films and pouches cannot go"
+        " in standard curbside bins. Check local grocery store drop-off bins"
+        " or place in landfill."
+    )
+  elif "cardboard" in item_lower or "box" in item_lower:
+    return (
+        "**Cardboard / Paper**: Flatten the clean box completely and place it"
+        " in your paper recycling bin."
+    )
+  elif "glass" in item_lower or "bottle" in item_lower:
+    return (
+        "**Glass**: Rinse out any remaining liquid and place in glass recycling."
+    )
+  elif "can" in item_lower or "tin" in item_lower or "aluminum" in item_lower:
+    return (
+        "**Metal**: Rinse lightly and place in your metal recycling bin."
+    )
+  else:
+    return (
+        f"**General Guidance for '{query}'**: If clean and made of rigid"
+        " plastic, paper, or metal, it is usually recyclable. When in doubt,"
+        " place in Landfill to avoid contaminating other recyclables."
+    )
 
-      with st.spinner("Searching databases..."):
+
+if st.button("Get Recycling Advice"):
+  if query_input:
+    clean_query = query_input.strip()
+    product_name = None
+
+    with st.spinner("Analyzing item..."):
+      # If the input is a barcode (numbers only)
+      if clean_query.isdigit():
         if api_key:
-          product_name, description = lookup_universal_barcode(
-              clean_code, api_key
-          )
+          product_name = lookup_api_barcode(clean_query, api_key)
 
         if product_name:
           st.success(f"**Product Found:** {product_name}")
-          if description:
-            st.write(f"**Description:** {description}")
+          item_to_check = product_name
         else:
           st.info(
-              "Barcode not found in the external database. Using material"
-              " category fallback..."
+              "Barcode not found in external database. Using smart material"
+              " fallback..."
           )
+          item_to_check = f"Barcode {clean_query}"
+      else:
+        # If the input is a text description
+        item_to_check = clean_query
 
-        # Universal Recycling Guidance (Always triggers so you get an answer)
-        st.markdown("### 📋 Disposal Guidance")
-
-        # Quick check based on barcode country code (e.g., 890 = India)
-        if clean_code.startswith("890"):
-          st.write(
-              "* **Origin Note:** This item was manufactured or registered in"
-              " India (Barcode prefix 890)."
-          )
-
-        st.write(
-            "• **Rigid Plastic / Bottles / Jars:** Rinse clean and place in"
-            " curbside recycling.\n"
-            "• **Flexible Pouches / Soft Plastic Wrappers:** Typically cannot"
-            " go in curbside bins. Check local store drop-off programs or place"
-            " in landfill.\n"
-            "• **Cardboard Boxes / Paper Packaging:** Flatten completely and"
-            " place in paper recycling."
-        )
+      # Fetch and display recycling advice
+      advice = get_local_advice(item_to_check)
+      st.markdown("### 📋 Disposal Guidance")
+      st.write(advice)
   else:
-    st.warning("Please type a barcode number first.")
+    st.warning("Please enter a barcode number or item name first.")
