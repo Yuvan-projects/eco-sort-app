@@ -2,25 +2,24 @@ import json
 import urllib.request
 import streamlit as st
 
-# Page Configuration
 st.set_page_config(
     page_title="Eco-Sort Recycler", page_icon="♻️", layout="centered"
 )
 
 st.title("♻️ Eco-Sort & Recycle")
 st.write(
-    "Scan or enter a product barcode to find out how to dispose of it properly!"
+    "Scan a barcode or type an item name (e.g., plastic pouch, cardboard box) to"
+    " get disposal advice!"
 )
 
-# Input field (mobile keyboards automatically switch to numeric mode for barcodes)
-barcode = st.text_input("Enter Barcode Number:")
+# Accepts either a barcode number or a text description
+query_input = st.text_input("Enter Barcode or Item Name:")
 
-# Optional: Camera input for mobile users
 st.write("Or take a photo of the item:")
 camera_image = st.camera_input("Take a picture")
 
 if camera_image is not None:
-  st.success("Photo captured! (Tip: Enter the barcode number above to lookup)")
+  st.success("Photo captured!")
 
 
 def lookup_product_by_barcode(code):
@@ -35,13 +34,11 @@ def lookup_product_by_barcode(code):
         return data.get("product", {}).get("product_name", "Unknown Product")
       return None
   except Exception as e:
-    st.error(f"Lookup Error: {e}")
     return None
 
 
-def ask_hugging_face(product_name):
-  # Replace with your actual Hugging Face API Token if needed
-  api_token = "HFAK0yKnr2GWvKImFMcFYn8rSePisNb"
+def ask_hugging_face(item_description):
+  api_token = "YOUR_HuggingFace_API_KEY_HERE"
   model_id = "meta-llama/Llama-3-8B-Instruct"
   url = f"https://api-inference.huggingface.co/models/{model_id}"
 
@@ -50,8 +47,8 @@ def ask_hugging_face(product_name):
       "Content-Type": "application/json",
   }
   prompt = (
-      f"The product is '{product_name}'. Is this item Compostable, Recyclable,"
-      " or Landfill? Give a brief disposal rule."
+      f"The item is '{item_description}'. Is this item Compostable,"
+      " Recyclable, or Landfill? Give a brief disposal rule."
   )
   payload = {"inputs": prompt, "parameters": {"max_new_tokens": 100}}
 
@@ -69,19 +66,29 @@ def ask_hugging_face(product_name):
 
 
 if st.button("Get Recycling Advice"):
-  if barcode:
-    with st.spinner("Looking up product and consulting AI..."):
-      product_name = lookup_product_by_barcode(barcode)
+  if query_input:
+    clean_query = query_input.strip()
+    with st.spinner("Analyzing item with AI..."):
 
-      if product_name:
-        st.success(f"Found Product: **{product_name}**")
-        advice = ask_hugging_face(product_name)
-
-        st.markdown("### 📋 Disposal Guidance")
-        st.write(advice)
+      # If it's a barcode, try looking it up in Open Food Facts first
+      if clean_query.isdigit() and len(clean_query) >= 8:
+        product_name = lookup_product_by_barcode(clean_query)
+        if product_name:
+          st.success(f"Found Product: **{product_name}**")
+          item_to_check = product_name
+        else:
+          # Fallback: If not in food database, let the AI evaluate it directly
+          st.info(
+              "Barcode not in food database. Consulting AI for recycling"
+              " guidance..."
+          )
+          item_to_check = f"Household packaging item (barcode {clean_query})"
       else:
-        st.warning(
-            "Product not found for this barcode. Try entering another one!"
-        )
+        # User typed a text description directly
+        item_to_check = clean_query
+
+      advice = ask_hugging_face(item_to_check)
+      st.markdown("### 📋 Disposal Guidance")
+      st.write(advice)
   else:
-    st.warning("Please enter a barcode number first.")
+    st.warning("Please enter a barcode or item name first.")
