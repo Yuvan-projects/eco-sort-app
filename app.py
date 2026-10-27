@@ -16,7 +16,7 @@ st.write(
 # Sidebar for API Key
 st.sidebar.header("⚙️ API Configuration")
 api_token = st.sidebar.text_input(
-    "Hugging Face API Token", type="password", value="HFAKZHBK6vK9G4zV8x7IK3BbQPwKIld"
+    "Hugging Face API Token", type="password", value="HFAKQWGcnxgUYmyOWgLgg9Huro4B0dl"
 )
 
 # Image capture options
