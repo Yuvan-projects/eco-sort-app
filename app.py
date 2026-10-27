@@ -38,7 +38,7 @@ def lookup_product_by_barcode(code):
 
 
 def ask_hugging_face(item_description):
-  api_token = "YOUR_HuggingFace_API_KEY_HERE"
+  api_token = "HFAK0yKnr2GWvKImFMcFYn8rSePisNb"
   model_id = "meta-llama/Llama-3-8B-Instruct"
   url = f"https://api-inference.huggingface.co/models/{model_id}"
 
