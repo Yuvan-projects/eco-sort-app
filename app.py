@@ -1,101 +1,100 @@
+import base64
 import json
 import urllib.request
 import streamlit as st
 
 st.set_page_config(
-    page_title="Eco-Sort Recycler", page_icon="♻️", layout="centered"
+    page_title="Eco-Vision Recycler", page_icon="📸", layout="centered"
 )
 
-st.title("♻️ Eco-Sort & Recycle")
+st.title("📸 Snap & Recycle")
 st.write(
-    "Type any product barcode number or item name to get instant disposal"
+    "Take a picture or upload an image of your item to get instant AI disposal"
     " advice!"
 )
 
-# Sidebar for optional API configuration
+# Sidebar for API Key
 st.sidebar.header("⚙️ API Configuration")
-api_key = st.sidebar.text_input(
-    "Product API Key (Optional)", type="password", value="HFAK0yKnr2GWvKImFMcFYn8rSePisNb"
+api_token = st.sidebar.text_input(
+    "Hugging Face API Token", type="password", value="HFAK0yKnr2GWvKImFMcFYn8rSePisNb"
 )
 
-# Main typing input (handles both barcodes and item names)
-query_input = st.text_input(
-    "Enter Barcode Number or Item Name:", placeholder="e.g. 8904132956728"
+# Image capture options
+camera_image = st.camera_input("Take a photo of the item")
+uploaded_image = st.file_uploader(
+    "Or upload an image file", type=["jpg", "jpeg", "png"]
 )
 
+# Pick whichever input the user provided
+active_image = camera_image if camera_image is not None else uploaded_image
 
-def lookup_api_barcode(code, key):
-  if not key:
-    return None
-  url = f"https://go-upc.com/api/v1/code/{code}"
-  headers = {"Authorization": f"Bearer {key}"}
-  req = urllib.request.Request(url, headers=headers)
+
+def analyze_image_with_vision_ai(image_file, token):
+  if not token:
+    return (
+        "**Error:** Please enter your Hugging Face API Token in the sidebar"
+        " first!"
+    )
+
+  # Model endpoint for a vision-language model
+  model_id = "meta-llama/Llama-3.2-11B-Vision-Instruct"
+  url = f"https://api-inference.huggingface.co/models/{model_id}"
+
+  # Read image bytes and convert to base64
+  bytes_data = image_file.getvalue()
+  base64_image = base64.b64encode(bytes_data).decode("utf-8")
+
+  headers = {
+      "Authorization": f"Bearer {token}",
+      "Content-Type": "application/json",
+  }
+
+  # Prompt payload for vision analysis
+  payload = {
+      "inputs": {
+          "image": f"data:image/jpeg;base64,{base64_image}",
+          "prompt": (
+              "Analyze this item. Identify what material it is made of"
+              " (e.g. plastic film, cardboard, glass, rigid plastic). Then"
+              " give clear disposal guidance: is it Recyclable, Compostable,"
+              " or Landfill?"
+          ),
+      }
+  }
+
+  req = urllib.request.Request(
+      url, data=json.dumps(payload).encode("utf-8"), headers=headers, method="POST"
+  )
+
   try:
-    with urllib.request.urlopen(req, timeout=5) as response:
-      data = json.loads(response.read().decode("utf-8"))
-      product = data.get("product", {})
-      return product.get("name")
-  except Exception:
-    return None
-
-
-def get_local_advice(query):
-  item_lower = query.lower()
-
-  if "plastic" in item_lower or "pouch" in item_lower or "wrapper" in item_lower:
+    with urllib.request.urlopen(req, timeout=15) as response:
+      result = json.loads(response.read().decode("utf-8"))
+      if isinstance(result, list) and len(result) > 0:
+        return result[0].get(
+            "generated_text", "Could not parse AI response text."
+        )
+      elif isinstance(result, dict) and "generated_text" in result:
+        return result["generated_text"]
+      return str(result)
+  except Exception as e:
     return (
-        "**Soft Plastic / Pouch**: Flexible plastic films and pouches cannot go"
-        " in standard curbside bins. Check local grocery store drop-off bins"
-        " or place in landfill."
-    )
-  elif "cardboard" in item_lower or "box" in item_lower:
-    return (
-        "**Cardboard / Paper**: Flatten the clean box completely and place it"
-        " in your paper recycling bin."
-    )
-  elif "glass" in item_lower or "bottle" in item_lower:
-    return (
-        "**Glass**: Rinse out any remaining liquid and place in glass recycling."
-    )
-  elif "can" in item_lower or "tin" in item_lower or "aluminum" in item_lower:
-    return (
-        "**Metal**: Rinse lightly and place in your metal recycling bin."
-    )
-  else:
-    return (
-        f"**General Guidance for '{query}'**: If clean and made of rigid"
-        " plastic, paper, or metal, it is usually recyclable. When in doubt,"
-        " place in Landfill to avoid contaminating other recyclables."
+        f"**API Connection Error:** {e}\n\n*Note: Make sure your token is valid"
+        " and has permissions for inference.*"
     )
 
 
-if st.button("Get Recycling Advice"):
-  if query_input:
-    clean_query = query_input.strip()
-    product_name = None
+if active_image is not None:
+  st.success("Image received successfully!")
+  st.image(active_image, caption="Your Item", use_container_width=True)
 
-    with st.spinner("Analyzing item..."):
-      # If the input is a barcode (numbers only)
-      if clean_query.isdigit():
-        if api_key:
-          product_name = lookup_api_barcode(clean_query, api_key)
+  if st.button("Analyze Photo for Recycling"):
+    with st.spinner("Analyzing photo with Vision AI..."):
+      advice = analyze_image_with_vision_ai(active_image, api_token)
 
-        if product_name:
-          st.success(f"**Product Found:** {product_name}")
-          item_to_check = product_name
-        else:
-          st.info(
-              "Barcode not found in external database. Using smart material"
-              " fallback..."
-          )
-          item_to_check = f"Barcode {clean_query}"
-      else:
-        # If the input is a text description
-        item_to_check = clean_query
-
-      # Fetch and display recycling advice
-      advice = get_local_advice(item_to_check)
-      st.markdown("### 📋 Disposal Guidance")
+      st.markdown("### 📋 AI Visual Analysis & Disposal Guidance")
       st.write(advice)
-  else:
-    st.warning("Please enter a barcode number or item name first.")
+else:
+  st.info(
+      "Please take a photo using your camera or upload an image file above to"
+      " get started."
+  )
